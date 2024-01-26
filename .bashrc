@@ -48,8 +48,23 @@ function _code_tunnel() {
     echo "$command"
     eval "$command"
 }
+function _git_everything() {
+    if [[ $1 == "-h" ]] || [[ $1 == "--help" ]]; then
+        echo "Usage: _git_everything [message]"
+        echo "Adds all changes to the staging area, commits them with the provided message, and pushes the changes to the remote repository."
+        return
+    fi
 
+    set -e
 
+    git add . || { echo "Failed to add changes to the staging area."; exit 1; }
+    git commit -m "$1" || { echo "Failed to commit changes."; exit 1; }
+    git push || { echo "Failed to push changes to the remote repository."; exit 1; }
+
+    echo "Changes have been successfully added, committed, and pushed."
+}
+
+alias csgit=_git_everything
 alias ct=_code_tunnel
 alias csci=_csci
 alias csinit=_csci_init
