@@ -1,7 +1,8 @@
+# hello 
 function _csci() {
     if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-        echo -e "\033[34mUsage:\033[0m \033[32mcsci <exe_name> <arg1> <arg2> ... <options>\033[0m"
-        echo -e "\033[34mOptions:\033[0m \033[33m-b | -B\033[0m runs executable from inside build directory"
+        echo -e "\033[34mUsage:\033[0m \033[32mcsci <exe_name> (<arg1> <arg2> ... (for executable only)) <options>(see below))\033[0m"
+        echo -e "\033[34mOptions:\033[0m you can use both!\n\033[33m-b | -B\033[0m runs executable from inside build directory\n\033[33m-v | -V\033[0m runs executable with valgrind to check for memory leaks"
         echo -e "\033[34mNote:\033[0m For \033[32mexe_name\033[0m use simply '\033[32mrun_app\033[0m' instead of './build/run_app' or './run_app'"
         return
     fi
