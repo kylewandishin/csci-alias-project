@@ -87,18 +87,95 @@ function _git_everything() {
     if [[ $1 == "-h" ]] || [[ $1 == "--help" ]]; then
         echo -e "\033[34mUsage:\033[0m \033[32mcgsit [message]\033[0m"
         echo -e "\033[34mDescription:\033[0m Adds all changes to the staging area,\033[33m commits them with the provided message,\033[0m and pushes the changes to the remote repository."
-    return
-fi
+        return
+    fi
 
+    git add . || { echo -e "Failed to add changes to the staging area."; return 1; }
+    git commit -m "$1" || { echo -e "Failed to commit changes."; return 1; }
 
-    set -e
-
-    git add . || { echo "Failed to add changes to the staging area."; exit 1; }
-    git commit -m "$1" || { echo "Failed to commit changes."; exit 1; }
-    git push || { echo "Failed to push changes to the remote repository."; exit 1; }
-
-    echo "Changes have been successfully added, committed, and pushed."
+    if git push 2>&1 | grep -q "Everything up-to-date"; then
+        echo -e "No changes to push. Repository is already up to date."
+    else
+        # Check if the push command encountered other errors
+        if [ $? -ne 0 ]; then
+            echo -e "Failed to push changes to the remote repository."
+            return 1
+        else
+            echo -e "Changes have been successfully added, committed, and pushed."
+        fi
+    fi
 }
+
+function check_status() {
+    api_response=$(curl -s -X POST \
+        -H "User-Agent: insomnia/2023.4.0" \
+        -H "Content-Type: multipart/form-data; boundary=X-INSOMNIA-BOUNDARY" \
+        -d $'--X-INSOMNIA-BOUNDARY\r\nContent-Disposition: form-data; name="@action"\r\n\r\ncheck\r\n--X-INSOMNIA-BOUNDARY\r\nContent-Disposition: form-data; name="submissionid"\r\n\r\n'"$submissionid"$'\r\n--X-INSOMNIA-BOUNDARY--\r\n' \
+        https://inginious.csel.io/@ddd05f7a13be7b7118459418d39742a30c151dbb@/lti/task)
+    # Extract the "status" value from the response
+    status=$(echo "$api_response" | grep -o '"status": "[^"]*"' | cut -d '"' -f 4)
+    status_s=""
+    if [ "$status" = "done" ]; then
+        status_s="\033[32m$status\e[0m"
+    else
+        status_s="\e[33m$status\e[0m"
+    fi
+    echo -e "Current status: $status_s"
+
+    # Return 0 if the status is "waiting", 1 otherwise
+    [ "$status" = "done" ] && return 1 || return 0
+}
+function _giturl() {
+    if [[ $1 == "-h" ]] || [[ $1 == "--help" ]]; then
+        echo -e "\033[34mUsage:\033[0m \033[32mcssub\033[0m"
+        echo -e "\033[34mDescription:\033[0m submits current code to github,\033[33m commits them with the provided message,\033[0m and pushes the changes to the remote repository."
+        return
+    fi
+    message="submission"
+    if [ $1 = "-m" ]; then
+        message="$2"
+    fi
+    eval "csgit \"$message\""
+    repo_url=$(git remote get-url origin)
+    api_response_submit=$(curl -s -X POST\
+        -H "User-Agent: insomnia/2023.4.0"\
+        -H "Content-Type: multipart/form-data; boundary=X-INSOMNIA-BOUNDARY"\
+        -d $'--X-INSOMNIA-BOUNDARY\r\nContent-Disposition: form-data; name="@action"\r\n\r\nsubmit\r\n--X-INSOMNIA-BOUNDARY\r\nContent-Disposition: form-data; name="github-link"\r\n\r\n'"$repo_url"$'\r\n--X-INSOMNIA-BOUNDARY--\r\n'\
+        https://inginious.csel.io/@ddd05f7a13be7b7118459418d39742a30c151dbb@/lti/task)
+    status_sub=$(echo "$api_response_submit" | grep -o '"status": "[^"]*"' | cut -d '"' -f 4)
+    if [ "$status_sub" = "ok" ]; then
+        status_sub="\033[32m$status_sub\033[0m"
+    else
+        status_sub="\033[31m$status_sub\033[0m"
+        echo -e "submitted with status: $status_sub"
+        return
+    fi
+    echo -e "submitted with status: $status_sub"
+    submissionid=$(echo "$api_response_submit" | grep -o '"submissionid": "[^"]*"' | cut -d '"' -f 4)
+    while check_status; do
+        sleep 1
+    done
+    sleep 1
+    api_response_f=$(curl -s -X POST\
+        -H "User-Agent: insomnia/2023.4.0"\
+        -H "Content-Type: multipart/form-data; boundary=X-INSOMNIA-BOUNDARY"\
+        -d $'--X-INSOMNIA-BOUNDARY\r\nContent-Disposition: form-data; name="@action"\r\n\r\ncheck\r\n--X-INSOMNIA-BOUNDARY\r\nContent-Disposition: form-data; name="submissionid"\r\n\r\n'"$submissionid"$'\r\n--X-INSOMNIA-BOUNDARY--\r\n'\
+        https://inginious.csel.io/@ddd05f7a13be7b7118459418d39742a30c151dbb@/lti/task)
+    echo "$api_reponse_f"
+    grade=$(echo "$api_response_f" | grep -o '"grade": "[^"]*"' | cut -d '"' -f 4)
+    if [ "$grade" = "100.0" ]; then
+        grade="\e[32m$grade%\e[0m"  # Green
+    elif [ "$(echo "$grade > 80.0" | bc -l)" -eq 1 ]; then
+        grade="\e[33m$grade%\e[0m"  # Orange
+    else
+        grade="\e[31m$grade%\e[0m"  # Red
+    fi
+    echo -e "_____________________________________________________________________________________"
+    echo -e "| You've succesfully tested repository!\n| repo: $repo_url\n| Total Grade: $grade"
+    echo -e "_____________________________________________________________________________________"
+}
+
+
 function _cshelp() {
     echo -e "\033[34mcsinit:\033[0m"
     eval "csinit -h"
@@ -106,9 +183,12 @@ function _cshelp() {
     eval "csci -h"
     echo -e "\n\033[34mcsgit:\033[0m"
     eval "csgit -h"
+    echo -e "\033[34mcssub:\033[0m"
+    eval "cssub -h"
 }
 
 alias cshelp=_cshelp
+alias cssub=_giturl
 alias csgit=_git_everything
 alias ct=_code_tunnel
 alias csci=_csci
